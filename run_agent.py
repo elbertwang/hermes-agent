@@ -512,6 +512,8 @@ class AIAgent:
         checkpoint_max_snapshots: int = 50,
         pass_session_id: bool = False,
         persist_session: bool = True,
+        project_id: str = None,
+        region: str = None,
     ):
         """
         Initialize the AI Agent.
@@ -591,6 +593,8 @@ class AIAgent:
         elif (provider_name is None) and "chatgpt.com/backend-api/codex" in self._base_url_lower:
             self.api_mode = "codex_responses"
             self.provider = "openai-codex"
+        elif self.provider == "vertex":
+            self.api_mode = "anthropic_messages"
         elif self.provider == "anthropic" or (provider_name is None and "api.anthropic.com" in self._base_url_lower):
             self.api_mode = "anthropic_messages"
             self.provider = "anthropic"
@@ -741,27 +745,44 @@ class AIAgent:
         # access for Codex Responses API streaming.
         self._anthropic_client = None
         self._is_anthropic_oauth = False
+        self._vertex_project_id = ""
+        self._vertex_region = ""
 
         if self.api_mode == "anthropic_messages":
-            from agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token
-            # Only fall back to ANTHROPIC_TOKEN when the provider is actually Anthropic.
-            # Other anthropic_messages providers (MiniMax, Alibaba, etc.) must use their own API key.
-            # Falling back would send Anthropic credentials to third-party endpoints (Fixes #1739, #minimax-401).
-            _is_native_anthropic = self.provider == "anthropic"
-            effective_key = (api_key or resolve_anthropic_token() or "") if _is_native_anthropic else (api_key or "")
-            self.api_key = effective_key
-            self._anthropic_api_key = effective_key
-            self._anthropic_base_url = base_url
-            from agent.anthropic_adapter import _is_oauth_token as _is_oat
-            self._is_anthropic_oauth = _is_oat(effective_key)
-            self._anthropic_client = build_anthropic_client(effective_key, base_url)
-            # No OpenAI client needed for Anthropic mode
-            self.client = None
-            self._client_kwargs = {}
-            if not self.quiet_mode:
-                print(f"🤖 AI Agent initialized with model: {self.model} (Anthropic native)")
-                if effective_key and len(effective_key) > 12:
-                    print(f"🔑 Using token: {effective_key[:8]}...{effective_key[-4:]}")
+            if self.provider == "vertex":
+                from agent.anthropic_adapter import build_vertex_client
+                self._vertex_project_id = project_id or os.getenv("ANTHROPIC_VERTEX_PROJECT_ID", "")
+                self._vertex_region = region or os.getenv("CLOUD_ML_REGION", "us-east5")
+                self.api_key = ""
+                self._anthropic_api_key = ""
+                self._anthropic_base_url = ""
+                self._is_anthropic_oauth = False
+                self._anthropic_client = build_vertex_client(self._vertex_project_id, self._vertex_region)
+                self.client = None
+                self._client_kwargs = {}
+                if not self.quiet_mode:
+                    print(f"🤖 AI Agent initialized with model: {self.model} (Vertex AI)")
+                    print(f"📍 Project: {self._vertex_project_id}, Region: {self._vertex_region}")
+            else:
+                from agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token
+                # Only fall back to ANTHROPIC_TOKEN when the provider is actually Anthropic.
+                # Other anthropic_messages providers (MiniMax, Alibaba, etc.) must use their own API key.
+                # Falling back would send Anthropic credentials to third-party endpoints (Fixes #1739, #minimax-401).
+                _is_native_anthropic = self.provider == "anthropic"
+                effective_key = (api_key or resolve_anthropic_token() or "") if _is_native_anthropic else (api_key or "")
+                self.api_key = effective_key
+                self._anthropic_api_key = effective_key
+                self._anthropic_base_url = base_url
+                from agent.anthropic_adapter import _is_oauth_token as _is_oat
+                self._is_anthropic_oauth = _is_oat(effective_key)
+                self._anthropic_client = build_anthropic_client(effective_key, base_url)
+                # No OpenAI client needed for Anthropic mode
+                self.client = None
+                self._client_kwargs = {}
+                if not self.quiet_mode:
+                    print(f"🤖 AI Agent initialized with model: {self.model} (Anthropic native)")
+                    if effective_key and len(effective_key) > 12:
+                        print(f"🔑 Using token: {effective_key[:8]}...{effective_key[-4:]}")
         else:
             if api_key and base_url:
                 # Explicit credentials from CLI/gateway — construct directly.
@@ -1252,6 +1273,8 @@ class AIAgent:
                 "anthropic_api_key": self._anthropic_api_key,
                 "anthropic_base_url": self._anthropic_base_url,
                 "is_anthropic_oauth": self._is_anthropic_oauth,
+                "vertex_project_id": self._vertex_project_id,
+                "vertex_region": self._vertex_region,
             })
 
     def reset_session_state(self):
@@ -1334,19 +1357,27 @@ class AIAgent:
 
         # ── Build new client ──
         if api_mode == "anthropic_messages":
-            from agent.anthropic_adapter import (
-                build_anthropic_client,
-                resolve_anthropic_token,
-                _is_oauth_token,
-            )
-            effective_key = api_key or self.api_key or resolve_anthropic_token() or ""
-            self.api_key = effective_key
-            self._anthropic_api_key = effective_key
-            self._anthropic_base_url = base_url or getattr(self, "_anthropic_base_url", None)
-            self._anthropic_client = build_anthropic_client(
-                effective_key, self._anthropic_base_url,
-            )
-            self._is_anthropic_oauth = _is_oauth_token(effective_key)
+            if new_provider == "vertex":
+                self._vertex_project_id = os.getenv("ANTHROPIC_VERTEX_PROJECT_ID", "") or self._vertex_project_id
+                self._vertex_region = os.getenv("CLOUD_ML_REGION", "us-east5") or self._vertex_region
+                self._anthropic_api_key = ""
+                self._anthropic_base_url = ""
+                self._is_anthropic_oauth = False
+                self._anthropic_client = self._build_anthropic_client_for_provider()
+            else:
+                from agent.anthropic_adapter import (
+                    build_anthropic_client,
+                    resolve_anthropic_token,
+                    _is_oauth_token,
+                )
+                effective_key = api_key or self.api_key or resolve_anthropic_token() or ""
+                self.api_key = effective_key
+                self._anthropic_api_key = effective_key
+                self._anthropic_base_url = base_url or getattr(self, "_anthropic_base_url", None)
+                self._anthropic_client = build_anthropic_client(
+                    effective_key, self._anthropic_base_url,
+                )
+                self._is_anthropic_oauth = _is_oauth_token(effective_key)
             self.client = None
             self._client_kwargs = {}
         else:
@@ -4103,13 +4134,12 @@ class AIAgent:
         except Exception:
             pass
 
+        self._anthropic_api_key = new_token
         try:
-            self._anthropic_client = build_anthropic_client(new_token, getattr(self, "_anthropic_base_url", None))
+            self._anthropic_client = self._build_anthropic_client_for_provider()
         except Exception as exc:
             logger.warning("Failed to rebuild Anthropic client after credential refresh: %s", exc)
             return False
-
-        self._anthropic_api_key = new_token
         # Update OAuth flag — token type may have changed (API key ↔ OAuth)
         from agent.anthropic_adapter import _is_oauth_token
         self._is_anthropic_oauth = _is_oauth_token(new_token)
@@ -4133,11 +4163,14 @@ class AIAgent:
             self._client_kwargs.pop("default_headers", None)
 
     def _swap_credential(self, entry) -> None:
+        if self.provider == "vertex":
+            return  # Vertex uses Google ADC — no credential pooling
+
         runtime_key = getattr(entry, "runtime_api_key", None) or getattr(entry, "access_token", "")
         runtime_base = getattr(entry, "runtime_base_url", None) or getattr(entry, "base_url", None) or self.base_url
 
         if self.api_mode == "anthropic_messages":
-            from agent.anthropic_adapter import build_anthropic_client, _is_oauth_token
+            from agent.anthropic_adapter import _is_oauth_token
 
             try:
                 self._anthropic_client.close()
@@ -4146,7 +4179,7 @@ class AIAgent:
 
             self._anthropic_api_key = runtime_key
             self._anthropic_base_url = runtime_base
-            self._anthropic_client = build_anthropic_client(runtime_key, runtime_base)
+            self._anthropic_client = self._build_anthropic_client_for_provider()
             self._is_anthropic_oauth = _is_oauth_token(runtime_key) if self.provider == "anthropic" else False
             self.api_key = runtime_key
             self.base_url = runtime_base
@@ -4212,6 +4245,15 @@ class AIAgent:
 
         return False, has_retried_429
 
+    def _build_anthropic_client_for_provider(self):
+        """Build the correct Anthropic client based on the current provider."""
+        if self.provider == "vertex":
+            from agent.anthropic_adapter import build_vertex_client
+            return build_vertex_client(self._vertex_project_id, self._vertex_region)
+        else:
+            from agent.anthropic_adapter import build_anthropic_client
+            return build_anthropic_client(self._anthropic_api_key, self._anthropic_base_url)
+
     def _anthropic_messages_create(self, api_kwargs: dict):
         if self.api_mode == "anthropic_messages":
             self._try_refresh_anthropic_client_credentials()
@@ -4260,13 +4302,8 @@ class AIAgent:
                 # seed future retries.
                 try:
                     if self.api_mode == "anthropic_messages":
-                        from agent.anthropic_adapter import build_anthropic_client
-
                         self._anthropic_client.close()
-                        self._anthropic_client = build_anthropic_client(
-                            self._anthropic_api_key,
-                            getattr(self, "_anthropic_base_url", None),
-                        )
+                        self._anthropic_client = self._build_anthropic_client_for_provider()
                     else:
                         request_client = request_client_holder.get("client")
                         if request_client is not None:
@@ -4814,13 +4851,8 @@ class AIAgent:
             if self._interrupt_requested:
                 try:
                     if self.api_mode == "anthropic_messages":
-                        from agent.anthropic_adapter import build_anthropic_client
-
                         self._anthropic_client.close()
-                        self._anthropic_client = build_anthropic_client(
-                            self._anthropic_api_key,
-                            getattr(self, "_anthropic_base_url", None),
-                        )
+                        self._anthropic_client = self._build_anthropic_client_for_provider()
                     else:
                         request_client = request_client_holder.get("client")
                         if request_client is not None:
@@ -4922,13 +4954,20 @@ class AIAgent:
 
             if fb_api_mode == "anthropic_messages":
                 # Build native Anthropic client instead of using OpenAI client
-                from agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token, _is_oauth_token
-                effective_key = (fb_client.api_key or resolve_anthropic_token() or "") if fb_provider == "anthropic" else (fb_client.api_key or "")
-                self.api_key = effective_key
-                self._anthropic_api_key = effective_key
-                self._anthropic_base_url = fb_base_url
-                self._anthropic_client = build_anthropic_client(effective_key, self._anthropic_base_url)
-                self._is_anthropic_oauth = _is_oauth_token(effective_key)
+                if fb_provider == "vertex":
+                    self._vertex_project_id = os.getenv("ANTHROPIC_VERTEX_PROJECT_ID", "")
+                    self._vertex_region = os.getenv("CLOUD_ML_REGION", "us-east5")
+                    self._anthropic_api_key = ""
+                    self._anthropic_base_url = ""
+                    self._is_anthropic_oauth = False
+                else:
+                    from agent.anthropic_adapter import resolve_anthropic_token, _is_oauth_token
+                    effective_key = (fb_client.api_key or resolve_anthropic_token() or "") if fb_provider == "anthropic" else (fb_client.api_key or "")
+                    self.api_key = effective_key
+                    self._anthropic_api_key = effective_key
+                    self._anthropic_base_url = fb_base_url
+                    self._is_anthropic_oauth = _is_oauth_token(effective_key)
+                self._anthropic_client = self._build_anthropic_client_for_provider()
                 self.client = None
                 self._client_kwargs = {}
             else:
@@ -5008,13 +5047,12 @@ class AIAgent:
 
             # ── Rebuild client for the primary provider ──
             if self.api_mode == "anthropic_messages":
-                from agent.anthropic_adapter import build_anthropic_client
                 self._anthropic_api_key = rt["anthropic_api_key"]
                 self._anthropic_base_url = rt["anthropic_base_url"]
-                self._anthropic_client = build_anthropic_client(
-                    rt["anthropic_api_key"], rt["anthropic_base_url"],
-                )
                 self._is_anthropic_oauth = rt["is_anthropic_oauth"]
+                self._vertex_project_id = rt.get("vertex_project_id", "")
+                self._vertex_region = rt.get("vertex_region", "")
+                self._anthropic_client = self._build_anthropic_client_for_provider()
                 self.client = None
             else:
                 self.client = self._create_openai_client(
@@ -5102,13 +5140,12 @@ class AIAgent:
             self.api_key = rt["api_key"]
 
             if self.api_mode == "anthropic_messages":
-                from agent.anthropic_adapter import build_anthropic_client
                 self._anthropic_api_key = rt["anthropic_api_key"]
                 self._anthropic_base_url = rt["anthropic_base_url"]
-                self._anthropic_client = build_anthropic_client(
-                    rt["anthropic_api_key"], rt["anthropic_base_url"],
-                )
                 self._is_anthropic_oauth = rt["is_anthropic_oauth"]
+                self._vertex_project_id = rt.get("vertex_project_id", "")
+                self._vertex_region = rt.get("vertex_region", "")
+                self._anthropic_client = self._build_anthropic_client_for_provider()
                 self.client = None
             else:
                 self.client = self._create_openai_client(
