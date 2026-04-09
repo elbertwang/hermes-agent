@@ -922,6 +922,7 @@ def select_provider_and_model(args=None):
         "copilot-acp": "GitHub Copilot ACP",
         "copilot": "GitHub Copilot",
         "anthropic": "Anthropic",
+        "vertex": "Google Vertex AI (Claude)",
         "gemini": "Google AI Studio",
         "zai": "Z.AI / GLM",
         "kimi-coding": "Kimi / Moonshot",
@@ -947,6 +948,7 @@ def select_provider_and_model(args=None):
         ("nous", "Nous Portal (Nous Research subscription)"),
         ("openrouter", "OpenRouter (100+ models, pay-per-use)"),
         ("anthropic", "Anthropic (Claude models — API key or Claude Code)"),
+        ("vertex", "Google Vertex AI (Claude on GCP — uses gcloud auth)"),
         ("openai-codex", "OpenAI Codex"),
         ("qwen-oauth", "Qwen OAuth (reuses local Qwen CLI login)"),
         ("copilot", "GitHub Copilot (uses GITHUB_TOKEN or gh auth token)"),
@@ -1059,6 +1061,8 @@ def select_provider_and_model(args=None):
         _remove_custom_provider(config)
     elif selected_provider == "anthropic":
         _model_flow_anthropic(config, current_model)
+    elif selected_provider == "vertex":
+        _model_flow_vertex(config, current_model)
     elif selected_provider == "kimi-coding":
         _model_flow_kimi(config, current_model)
     elif selected_provider in ("gemini", "zai", "minimax", "minimax-cn", "kilocode", "opencode-zen", "opencode-go", "ai-gateway", "alibaba", "huggingface"):
@@ -2595,6 +2599,94 @@ def _model_flow_anthropic(config, current_model=""):
         print(f"Default model set to: {selected} (via Anthropic)")
     else:
         print("No change.")
+
+
+def _model_flow_vertex(config, current_model=""):
+    """Flow for Google Vertex AI provider — uses gcloud ADC, no API key needed."""
+    import os
+    from hermes_cli.auth import _prompt_model_selection, _save_model_choice
+    from hermes_cli.config import load_config, save_config, save_env_value
+    from hermes_cli.models import _PROVIDER_MODELS
+
+    # Check current Vertex AI configuration
+    project_id = os.getenv("ANTHROPIC_VERTEX_PROJECT_ID", "").strip()
+    region = os.getenv("CLOUD_ML_REGION", "").strip()
+
+    print()
+    print("  Google Vertex AI uses Google Cloud Application Default Credentials.")
+    print("  Authenticate with: gcloud auth application-default login")
+    print()
+
+    if project_id:
+        print(f"  Project ID:  {project_id} ✓")
+    if region:
+        print(f"  Region:      {region} ✓")
+    print()
+
+    # Prompt for project ID
+    if not project_id:
+        try:
+            project_id = input("  GCP Project ID (ANTHROPIC_VERTEX_PROJECT_ID): ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            return
+        if not project_id:
+            print("  Cancelled — project ID is required.")
+            return
+    else:
+        try:
+            new_project = input(f"  GCP Project ID [{project_id}]: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            return
+        if new_project:
+            project_id = new_project
+
+    # Prompt for region
+    default_region = region or "us-east5"
+    try:
+        new_region = input(f"  Region [{default_region}]: ").strip()
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return
+    region = new_region or default_region
+
+    # Save env values
+    save_env_value("ANTHROPIC_VERTEX_PROJECT_ID", project_id)
+    save_env_value("CLOUD_ML_REGION", region)
+    save_env_value("CLAUDE_CODE_USE_VERTEX", "1")
+    os.environ["ANTHROPIC_VERTEX_PROJECT_ID"] = project_id
+    os.environ["CLOUD_ML_REGION"] = region
+    os.environ["CLAUDE_CODE_USE_VERTEX"] = "1"
+    print()
+    print(f"  ✓ Saved: project={project_id}, region={region}")
+    print()
+
+    # Model selection — Vertex uses the same models as Anthropic
+    model_list = _PROVIDER_MODELS.get("anthropic", [])
+    if model_list:
+        selected = _prompt_model_selection(model_list, current_model=current_model)
+    else:
+        try:
+            selected = input("  Model name (e.g., claude-sonnet-4-5-20250929): ").strip()
+        except (KeyboardInterrupt, EOFError):
+            selected = None
+
+    if selected:
+        _save_model_choice(selected)
+
+        cfg = load_config()
+        model = cfg.get("model")
+        if not isinstance(model, dict):
+            model = {"default": model} if model else {}
+            cfg["model"] = model
+        model["provider"] = "vertex"
+        model.pop("base_url", None)
+        save_config(cfg)
+
+        print(f"  Default model set to: {selected} (via Vertex AI)")
+    else:
+        print("  No change.")
 
 
 def cmd_login(args):

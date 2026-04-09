@@ -34,6 +34,7 @@ _PROVIDER_PREFIXES: frozenset[str] = frozenset({
     "github-models", "kimi", "moonshot", "claude", "deep-seek",
     "opencode", "zen", "go", "vercel", "kilo", "dashscope", "aliyun", "qwen",
     "qwen-portal",
+    "vertex", "vertex-ai", "google-vertex",
 })
 
 

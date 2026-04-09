@@ -78,6 +78,11 @@ HERMES_OVERLAYS: Dict[str, HermesOverlay] = {
         transport="anthropic_messages",
         extra_env_vars=("ANTHROPIC_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"),
     ),
+    "vertex": HermesOverlay(
+        transport="anthropic_messages",
+        auth_type="gcloud_adc",
+        extra_env_vars=("ANTHROPIC_VERTEX_PROJECT_ID", "CLOUD_ML_REGION"),
+    ),
     "zai": HermesOverlay(
         transport="openai_chat",
         extra_env_vars=("GLM_API_KEY", "ZAI_API_KEY", "Z_AI_API_KEY"),
@@ -180,6 +185,10 @@ ALIASES: Dict[str, str] = {
     "claude": "anthropic",
     "claude-code": "anthropic",
 
+    # vertex (Google Vertex AI)
+    "vertex-ai": "vertex",
+    "google-vertex": "vertex",
+
     # github-copilot (models.dev ID)
     "copilot": "github-copilot",
     "github": "github-copilot",
@@ -237,6 +246,7 @@ _LABEL_OVERRIDES: Dict[str, str] = {
     "nous": "Nous Portal",
     "openai-codex": "OpenAI Codex",
     "copilot-acp": "GitHub Copilot ACP",
+    "vertex": "Google Vertex AI (Claude)",
     "local": "Local endpoint",
 }
 

@@ -147,6 +147,7 @@ class ProviderInfo:
 PROVIDER_TO_MODELS_DEV: Dict[str, str] = {
     "openrouter": "openrouter",
     "anthropic": "anthropic",
+    "vertex": "anthropic",  # Vertex AI serves Anthropic's models
     "zai": "zai",
     "kimi-coding": "kimi-for-coding",
     "minimax": "minimax",
