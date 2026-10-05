@@ -171,3 +171,13 @@ def test_auxiliary_client_uses_vertex(vertex_env):
     client, model = resolve_provider_client("vertex-claude", "claude-haiku-4-5@20251001")
     assert model == "claude-haiku-4-5@20251001"
     assert type(client._real_client).__name__ == "AnthropicVertex"
+
+
+def test_vertex_org_policy_structured_outputs_is_a_structured_output_rejection():
+    from agent.auxiliary_client import _is_structured_output_rejection
+    exc = Exception(
+        "Error code: 400 - [{'error': {'code': 400, 'message': 'Organization Policy constraint "
+        "constraints/vertexai.allowedPartnerModelFeatures violated for `projects/1` attempting to use a "
+        "disallowed feature structured_outputs for Partner model claude-opus-5-5.', 'status': 'FAILED_PRECONDITION'}}]")
+    exc.status_code = 400
+    assert _is_structured_output_rejection(exc)

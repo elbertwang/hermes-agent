@@ -3393,6 +3393,10 @@ def _is_structured_output_rejection(exc: Exception) -> bool:
         return True
     if "response_format" in err_lower and "unavailable" in err_lower:
         return True
+    # Vertex AI partner models (Claude) behind an org policy that withholds the feature:
+    # "constraints/vertexai.allowedPartnerModelFeatures violated ... disallowed feature structured_outputs".
+    if "structured_outputs" in err_lower and "allowedpartnermodelfeatures" in err_lower:
+        return True
     # Gateways that validate the request body with a strict pydantic model reject the
     # OBJECT-form json_schema by shape ("str type expected" on response_format.json_schema,
     # 422) rather than by naming the feature. The field is what they refuse; the retry
