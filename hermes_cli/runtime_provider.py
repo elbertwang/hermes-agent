@@ -919,6 +919,28 @@ def _resolve_vertex_runtime(requested_provider: str) -> Dict[str, Any]:
     return _runtime("vertex", "chat_completions", base_url.rstrip("/"), token, source="vertex-oauth", requested_provider=requested_provider)
 
 
+def _is_vertex_claude(requested_provider: str) -> bool:
+    """``vertex-claude`` or one of its plugin aliases (plugin aliases are unknown to normalize_provider)."""
+    from providers import get_provider_profile
+    profile = get_provider_profile(requested_provider) if requested_provider else None
+    return profile is not None and profile.name == "vertex-claude"
+
+
+def _resolve_vertex_claude_runtime(requested_provider: str) -> Dict[str, Any]:
+    """Claude on Vertex AI. ADC lives inside AnthropicVertex, so ``api_key`` is a sentinel and
+    ``base_url`` is for display / cache keys only; project + region ride along for the agent."""
+    from agent.vertex_claude_adapter import (
+        ADC_SENTINEL, VertexClaudeConfigError, resolve_project_region, vertex_base_url,
+    )
+    try:
+        project, region = resolve_project_region()
+    except VertexClaudeConfigError as exc:
+        raise AuthError(str(exc), provider="vertex-claude", code="missing_project") from exc
+    return _runtime("vertex-claude", "anthropic_messages", vertex_base_url(region), ADC_SENTINEL, source="google-adc",
+                    region=region, vertex_project=project, vertex_location=region,
+                    requested_provider=requested_provider)
+
+
 def _resolve_requested_shortcuts(requested_provider, explicit_api_key, explicit_base_url, target_model) -> Optional[Dict[str, Any]]:
     """Providers decided on the REQUESTED name alone, before custom / pool / generic paths."""
     if requested_provider == "moa":
@@ -939,6 +961,8 @@ def _resolve_requested_shortcuts(requested_provider, explicit_api_key, explicit_
                                               target_model=target_model)
     if requested_provider in _VERTEX_NAMES:
         return _resolve_vertex_runtime(requested_provider)
+    if _is_vertex_claude(requested_provider):
+        return _resolve_vertex_claude_runtime(requested_provider)
     return None
 
 

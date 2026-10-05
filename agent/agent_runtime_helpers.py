@@ -1177,6 +1177,9 @@ def _rebuild_primary_client(agent, rt: Dict[str, Any], *, reason: str) -> None:
     elif agent.provider == "bedrock" and agent.api_mode in ("anthropic_messages", "bedrock_converse"):
         from agent.bedrock_adapter import bind_bedrock_runtime
         bind_bedrock_runtime(agent, agent.base_url, agent.api_mode)
+    elif agent.provider == "vertex-claude":
+        from agent.vertex_claude_adapter import bind_vertex_claude_runtime
+        bind_vertex_claude_runtime(agent)
     elif agent.api_mode == "anthropic_messages":
         _build_anthropic_client_from_runtime(agent, rt)
     else:
@@ -2234,6 +2237,10 @@ def _build_switched_client(agent, new_provider, api_key, base_url, api_mode, new
         # Anthropic/OpenAI builders (which would ship the ``aws-sdk`` sentinel as a credential).
         from agent.bedrock_adapter import bind_bedrock_runtime
         bind_bedrock_runtime(agent, base_url or agent.base_url, api_mode)
+        return
+    if new_provider == "vertex-claude":
+        from agent.vertex_claude_adapter import bind_vertex_claude_runtime
+        bind_vertex_claude_runtime(agent)
         return
     if api_mode == "anthropic_messages":
         from agent.anthropic_adapter import build_anthropic_client

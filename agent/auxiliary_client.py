@@ -5396,6 +5396,9 @@ def _resolve_registry_branch(req: _ResolveRequest) -> _ResolveResult:
         client, final_model = _build_vertex_client(provider, req.model)
     elif auth_type == "aws_sdk":
         client, final_model = _build_bedrock_client(provider, req.model, raw_codex=req.raw_codex)
+    elif auth_type == "google_adc":
+        from agent.vertex_claude_adapter import build_aux_client
+        client, final_model = build_aux_client(provider, req.model)
     elif auth_type in {"oauth_device_code", "oauth_external"}:
         # nous / openai-codex / xai-oauth already returned from their explicit branches.
         _log_once_debug(_LOGGED_UNSUPPORTED_OAUTH_KEYS, provider,

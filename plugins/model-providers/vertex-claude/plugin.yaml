@@ -1,0 +1,5 @@
+name: vertex-claude-provider
+kind: model-provider
+version: 1.0.0
+description: Claude on Google Vertex AI (ADC auth, AnthropicVertex SDK)
+author: Hermes Agent

@@ -2189,6 +2189,9 @@ def _get_aws_sdk_auth_status(target: str) -> Dict[str, Any]:
         return {"logged_in": False, "provider": target, "error": "boto3 not installed"}
 
 
+from agent.vertex_claude_adapter import google_adc_auth_status as _get_google_adc_auth_status  # noqa: E402
+
+
 def get_auth_status(provider_id: Optional[str] = None) -> Dict[str, Any]:
     """Generic auth status dispatcher: bespoke builders (``OAUTH_PROVIDER_FLOWS`` plus Spotify /
     Azure Foundry) first, then the registry ``auth_type`` so a whole provider class (e.g. every
@@ -2216,6 +2219,7 @@ _STATUS_BY_AUTH_TYPE: Dict[str, str] = {
     "external_process": "get_external_process_provider_status",
     "api_key": "get_api_key_provider_status",
     "aws_sdk": "_get_aws_sdk_auth_status",
+    "google_adc": "_get_google_adc_auth_status",
     # OAuth-shaped plugin providers (their login lives in the plugin's auth_handler, tokens in the pool).
     "oauth_device_code": "get_plugin_oauth_auth_status",
     "oauth_external": "get_plugin_oauth_auth_status"}

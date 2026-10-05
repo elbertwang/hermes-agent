@@ -410,6 +410,8 @@ def _resolve_api_mode(agent, api_mode, provider_name, base_url):
         host.startswith("bedrock-runtime.") and base_url_host_matches(url, "amazonaws.com")
     ):
         agent.api_mode = "bedrock_converse"
+    elif agent.provider == "vertex-claude":
+        agent.api_mode = "anthropic_messages"
     elif agent.provider in {"nous", "nous-portal", "nousresearch"}:
         # Portal is dual-wire (anthropic/* → Messages, else chat_completions); covers direct
         # AIAgent construction without a resolved runtime.
@@ -750,6 +752,13 @@ def _init_anthropic_client(agent, api_key, base_url, _provider_timeout):
         bind_bedrock_runtime(agent, base_url, "anthropic_messages")
         if not agent.quiet_mode:
             print(f"🤖 AI Agent initialized with model: {agent.model} (AWS Bedrock + AnthropicBedrock SDK, {agent._bedrock_region})")
+        return
+    if agent.provider == "vertex-claude":
+        # AnthropicVertex SDK (ADC auth, token refreshed inside the SDK); same shape as Bedrock.
+        from agent.vertex_claude_adapter import bind_vertex_claude_runtime
+        bind_vertex_claude_runtime(agent)
+        if not agent.quiet_mode:
+            print(f"🤖 AI Agent initialized with model: {agent.model} (Google Vertex AI + AnthropicVertex SDK, {agent._vertex_region})")
         return
     # ANTHROPIC_TOKEN fallback only for native Anthropic — other anthropic_messages providers
     # must use their own key or Anthropic credentials leak to third-party endpoints.

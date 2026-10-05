@@ -89,6 +89,9 @@ HERMES_OVERLAYS: Dict[str, HermesOverlay] = {
     # would treat a Vertex MoA slot as an unknown custom endpoint, losing the identity
     # _refresh_provider_credentials() needs to re-mint an expired token on 401.
     "vertex": HermesOverlay(auth_type="vertex"),
+    # Claude on Vertex (ADC inside AnthropicVertex, agent/vertex_claude_adapter.py). Same reason:
+    # without an overlay get_provider() is None and determine_api_mode() falls to chat_completions.
+    "vertex-claude": HermesOverlay(transport="anthropic_messages", auth_type="google_adc"),
 }
 
 
@@ -146,7 +149,8 @@ _LABEL_OVERRIDES: Dict[str, str] = {
     "copilot-acp": "GitHub Copilot ACP", "stepfun": "StepFun Step Plan", "xiaomi": "Xiaomi MiMo", "gmi": "GMI Cloud",
     "upstage": "Upstage Solar", "actual": "Actual Computer", "tencent-tokenhub": "Tencent TokenHub",
     "nebius-token-factory": "Nebius Token Factory", "tencent-tokenplan": "Tencent TokenPlan", "lmstudio": "LM Studio",
-    "custom": "Custom endpoint", "bedrock": "AWS Bedrock", "vertex": "Google Vertex AI", "ollama-cloud": "Ollama Cloud",
+    "custom": "Custom endpoint", "bedrock": "AWS Bedrock", "vertex": "Google Vertex AI",
+    "vertex-claude": "Google Vertex AI (Claude)", "ollama-cloud": "Ollama Cloud",
     "xai-oauth": "xAI Grok OAuth (SuperGrok / Premium+)",
 }
 

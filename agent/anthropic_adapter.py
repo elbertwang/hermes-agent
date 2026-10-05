@@ -526,6 +526,22 @@ def build_anthropic_bedrock_client(region: str):
     )
 
 
+def build_anthropic_vertex_client(project_id: str, region: str):
+    """AnthropicVertex client for Claude on Google Vertex AI (ADC, refreshed inside the SDK).
+    Mirrors :func:`build_anthropic_bedrock_client` except ``context-1m-2025-08-07`` is NOT
+    attached: Vertex answers it with HTTP 400 ("Unexpected value(s)"); only the common betas pass."""
+    from agent.vertex_adapter import _ensure_google_auth
+    sdk = _require_sdk("the vertex-claude provider")
+    if not hasattr(sdk, "AnthropicVertex"):
+        raise ImportError("anthropic.AnthropicVertex not available. Run: hermes pm repair")
+    _ensure_google_auth()  # AnthropicVertex imports google.auth lazily on the first request
+    return sdk.AnthropicVertex(
+        project_id=project_id, region=region, timeout=_client_timeout(None),
+        max_retries=0,  # retry belongs to hermes's outer loop (honors Retry-After)
+        default_headers=_beta_header(list(_COMMON_BETAS)),
+    )
+
+
 def _normalize_to_mcp_wire(name: str) -> str:
     """OAuth wire form of a tool name (no aliasing): ``mcp__<...>``. Anthropic's OAuth billing
     classifier treats a single-underscore ``mcp_`` tool name as a third-party-app fingerprint

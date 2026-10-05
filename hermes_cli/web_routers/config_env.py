@@ -169,6 +169,10 @@ _AUTH_TYPE_ENV_VARS = {
         ("AWS_PROFILE", lambda d, var: f"{d.label} ({var})"),
     ),
     "vertex": (("VERTEX_CREDENTIALS_PATH", lambda d, var: f"{d.label} — service account JSON path (or use ADC)"),),
+    "google_adc": (
+        ("VERTEX_PROJECT", lambda d, var: f"{d.label} — GCP project id (auth via ADC)"),
+        ("VERTEX_LOCATION", lambda d, var: f"{d.label} — region, e.g. global or us-east5"),
+    ),
 }
 
 

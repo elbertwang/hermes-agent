@@ -72,6 +72,11 @@ def _swap_fallback_clients(agent, fb_client, fb_provider: str, fb_model: str, fb
         from agent.bedrock_adapter import bind_bedrock_runtime
         bind_bedrock_runtime(agent, fb_base_url, fb_api_mode)
         return
+    if fb_provider == "vertex-claude":
+        # ADC auth inside AnthropicVertex: the fallback client's ``google-adc`` key is a sentinel.
+        from agent.vertex_claude_adapter import bind_vertex_claude_runtime
+        bind_vertex_claude_runtime(agent)
+        return
     # The SDK exposes an empty/stale api_key when a rotating source is installed.
     key_provider = vars(fb_client).get("_api_key_provider")
     credential = key_provider if callable(key_provider) else fb_client.api_key
@@ -487,6 +492,8 @@ class ClientLifecycleMixin:
         """Cache key over everything forcing a fresh client: credential, base URL/region, timeout, 1M-beta flag."""
         if getattr(self, "provider", None) == "bedrock":
             return ("bedrock", getattr(self, "_bedrock_region", "us-east-1") or "us-east-1")
+        if getattr(self, "provider", None) == "vertex-claude":
+            return ("vertex-claude", getattr(self, "_vertex_project", None), getattr(self, "_vertex_region", None))
         return (
             "direct", self._anthropic_api_key, getattr(self, "_anthropic_base_url", None),
             get_provider_request_timeout(self.provider, self.model), bool(getattr(self, "_oauth_1m_beta_disabled", False)),
@@ -506,6 +513,10 @@ class ClientLifecycleMixin:
         from agent.anthropic_adapter import build_anthropic_bedrock_client, build_anthropic_client
         if key[0] == "bedrock":
             return build_anthropic_bedrock_client(key[1])
+        if key[0] == "vertex-claude":
+            from agent.anthropic_adapter import build_anthropic_vertex_client
+            from agent.vertex_claude_adapter import resolve_project_region
+            return build_anthropic_vertex_client(*resolve_project_region(key[1], key[2]))
         return build_anthropic_client(key[1], key[2], timeout=key[3], drop_context_1m_beta=key[4])
 
     def _create_request_anthropic_client(self, *, reason: str) -> Any:
